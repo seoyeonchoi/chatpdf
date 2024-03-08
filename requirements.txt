@@ -1,0 +1,8 @@
+pypdf
+langchain
+openai
+pypdf
+chromadb
+tiktoken
+sentence-transformers
+pysqlite3-binary
