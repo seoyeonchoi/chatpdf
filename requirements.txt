@@ -1,9 +1,11 @@
-pypdf
 langchain
+langchain_community
+langchain_text_splitters
+langchain_openai
+pypdf
 openai
 pypdf
 chromadb
 tiktoken
 sentence-transformers
 pysqlite3-binary
-langchain_openai
