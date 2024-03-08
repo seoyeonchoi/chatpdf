@@ -22,8 +22,11 @@ import os
 st.title("ChatPDF")
 st.write("---")
 
+#OpenAI KEY 입력 받기
+openai_key = st.text_input('OPEN_AI_API_KEY', type="password")
+
 # 파일 업로드
-uploaded_file = st.file_uploader("Choose a file")
+uploaded_file = st.file_uploader("PDF 파일을 올려주세요!", type=['pdf'])
 st.write("---")
 
 def pdf_to_document(uploaded_file):
@@ -53,7 +56,7 @@ if uploaded_file is not None:
 
     # create the open-source embedding function
     # embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
-    embedding_function = OpenAIEmbeddings()  
+    embedding_function = OpenAIEmbeddings(openai_api_key=openai_key)
 
     # load it into Chroma (text to embedding model)
     db = Chroma.from_documents(texts, embedding_function)
@@ -64,7 +67,7 @@ if uploaded_file is not None:
 
     if st.button('PDF에게 질문하기'):
         with st.spinner('Wait for it...'):
-            llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0, max_tokens=500)  # 라마 교체 가능
+            llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0, max_tokens=500, openai_api_key=openai_key)  # 라마 교체 가능
             qa_chain = RetrievalQA.from_chain_type(llm, retriever=db.as_retriever())
             result = qa_chain({"query": question})
             st.write(result["result"])
