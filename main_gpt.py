@@ -1,0 +1,96 @@
+from uuid import UUID
+from dotenv import load_dotenv
+from langchain_core.outputs import ChatGenerationChunk, GenerationChunk
+load_dotenv()
+
+from langchain_community.document_loaders.csv_loader import CSVLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.embeddings.sentence_transformer import (
+    SentenceTransformerEmbeddings,
+)
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain_openai import ChatOpenAI
+from langchain.chains import RetrievalQA
+import streamlit as st
+import tempfile
+import os
+from streamlit_extras.buy_me_a_coffee import button
+
+button(username="Seoyeon", floating=True, width=221)
+
+
+# 제목
+st.title("ChatPDF")
+st.write("---")
+
+#OpenAI KEY 입력 받기
+openai_key = st.text_input('OPEN_AI_API_KEY', type="password")
+
+# 파일 업로드
+uploaded_file = st.file_uploader("csv 파일을 올려주세요!", type=['csv'])
+st.write("---")
+
+def csv_to_document(uploaded_file):
+    temp_dir = tempfile.TemporaryDirectory()  # 임시 디렉토리를 만들어서 메모리에 저장함
+    temp_filepath = os.path.join(temp_dir.name, uploaded_file.name)
+    with open(temp_filepath, "wb") as f:
+        f.write(uploaded_file.getvalue())
+    loader = CSVLoader(temp_filepath)
+    data = loader.load()
+    return data
+
+
+
+# 업로드 되면 동작하는 코드
+if uploaded_file is not None:
+    data = csv_to_document(uploaded_file)
+    print(data)
+
+    # #Split
+    # text_splitter = RecursiveCharacterTextSplitter(
+    #     chunk_size=2000, # 몇 글자 단위로 쪼갤 것인지
+    #     chunk_overlap=200, # 문맥을 위해 앞뒤로 중복을 포함할 문자 수
+    #     length_function=len,  
+    #     is_separator_regex=False,  # 정규 표현식으로 자를지 여부
+    # )
+
+    # texts = text_splitter.split_documents(data)
+
+    # create the open-source embedding function
+    # embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+    embedding_function = OpenAIEmbeddings(openai_api_key=openai_key)
+
+    # load it into Chroma (text to embedding model)
+    db = Chroma.from_documents(data, embedding_function)
+
+    #Question
+    st.header("csv에게 질문해보세요!!")
+    question = st.text_input('질문을 입력하세요')
+
+    # Stream 받아 줄 handler 만들기
+    from langchain.callbacks.base import BaseCallbackHandler
+    class StreamHandler(BaseCallbackHandler):
+        def __init__(self, container, initial_text=""):
+            self.container = container
+            self.text=initial_text
+        def on_llm_new_token(self, token: str, **kwargs) -> None:
+            self.text+= token
+            self.container.markdown(self.text)
+
+    llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0, max_tokens=500, openai_api_key=openai_key, streaming=True, callbacks=[stream_handler])  # 라마 교체 가능
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "user의 질문에 따라 입력된 csv의 input을 참고하여 response에서 적절한 답을 알려주시오"),
+        ("user", "{input}")
+    ])
+    chain = prompt | llm
+
+    if st.button('csv에게 질문하기'):
+        with st.spinner('Wait for it...'):
+            chat_box = st.empty()
+            stream_handler = StreamHandler(chat_box)
+            qa_chain = RetrievalQA.from_chain_type(llm, retriever=db.as_retriever())
+            qa_chain({"query": question})
+            
